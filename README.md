@@ -1,12 +1,65 @@
-# React + Vite
+# ASOS Explorer (React)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Live demo:** [asos-explorer.netlify.app](https://asos-explorer.netlify.app/)
 
-Currently, two official plugins are available:
+Explore U.S. ASOS (Automated Surface Observing Systems) stations on a map and visualize recent historical observations with fast, resilient charts.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## Expanding the ESLint configuration
+## Features
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Interactive map:** Click any station to load its recent history.
+- **Smart charts:** Temperature, dewpoint, wind (including derived `wind_speed` from `wind_x`, `wind_y`), pressure, precipitation, and more.
+- **Time controls:** Quick ranges (24h / 3d / 7d / all) plus a calendar day picker (`YYYY-MM-DD`).
+- **Resilient to messy data:** 
+  - Normalizes timestamps  
+  - Ignores non-numeric values  
+  - Handles gaps / nulls  
+  - Sorts out-of-order rows
+- **Production-ready:** 
+  - Deployed on Netlify with proxy rewrites, SPA fallback, and error boundaries  
+  - Honors API rate limit (`20/min`)
+
+---
+
+## Tech Stack
+
+- **UI:** React 18 + Vite  
+- **Map:** Leaflet + react-leaflet  
+- **Charts:** Chart.js (via react-chartjs-2)  
+- **Hosting:** Netlify  
+- **API:** [sfc.windbornesystems.com](https://sfc.windbornesystems.com)  
+
+---
+
+## API Endpoints Used
+- GET /stations
+- GET /historical_weather?station=<station_id>
+
+
+
+> ⚠️ **Notes:**  
+> - Station responses may vary by field names.  
+> - Historical payloads can contain `null`s or mixed types.  
+
+The app’s **normalizer**:
+- Detects time keys (`timestamp`, `time`, `datetime`, …) and builds ISO labels  
+- Coerces numeric-ish fields  
+- Computes `wind_speed = sqrt(wind_x^2 + wind_y^2)` when components exist  
+- Sorts records by time; filters by range/day  
+
+---
+
+## Local Development
+
+```bash
+# install dependencies
+npm install
+
+# run dev server
+npm run dev
+# open http://localhost:5173
+
+# production build
+npm run build
+```
