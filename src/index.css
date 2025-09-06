@@ -1,0 +1,30 @@
+:root { --bg:#0b1220; --fg:#e8eefc; --muted:#9bb0d3; --border:#223; }
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; }
+
+header { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+header strong { font-size:16px; }
+.pill { background:#0f172a; border:1px solid var(--border); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:12px; }
+
+/* Main 2-column layout */
+.wrap { display:grid; grid-template-columns: 1fr 380px; gap:12px; padding:12px; }
+
+/* Cards & controls */
+.card { background:#0f172a; border:1px solid var(--border); border-radius:12px; padding:12px; }
+.input, .select, .btn { border:1px solid #2a3553; background:#0c1426; color:var(--fg); border-radius:10px; padding:8px 10px; }
+
+/* Map container: use a CLASS (not #map) */
+.map { height: 65vh; border:1px solid var(--border); border-radius:12px; }
+
+/* Sidebar list */
+.list { height: 30vh; overflow:auto; border:1px solid var(--border); border-radius:10px; background:#0c1426; }
+.station { padding:8px 10px; border-bottom:1px solid #18213a; cursor:pointer; }
+.station:hover { background:#121b31; }
+
+/* Messages / overlay */
+.msg { border:1px dashed #2a3553; background:#0c1426; color:var(--muted); padding:12px; border-radius:10px; text-align:center; }
+#overlay { position:fixed; inset:0; display:none; place-items:center; background:rgba(12,20,38,.55); z-index:9999; }
+
+/* Responsive */
+@media (max-width:1050px){ .wrap { grid-template-columns: 1fr; } .map { height: 50vh; } }
