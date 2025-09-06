@@ -1,85 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Line } from 'react-chartjs-2'
-import { Chart as ChartJS, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend } from 'chart.js'
+import 'chart.js/auto' // auto-registers all needed Chart.js bits
 import { isNumeric, discoverNumericKeysWithCounts, filterByRange } from '../lib/series.js'
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend)
+// Re-export so App.jsx can continue importing normalizeHistorical from ChartPanel
+export { normalizeHistorical } from '../lib/series.js'
 
+const CHART_HEIGHT = 320
 
-
-const isNumeric = (v) =>
-  (typeof v === 'number' && Number.isFinite(v)) ||
-  (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)))
-
-function detectTimeKey(row) {
-  const c = ['timestamp','time','datetime','date','valid_time','obsTimeUtc','valid','ob_time']
-  return c.find(k => k in row) || null
-}
-function toLabel(d) { return d.toISOString().replace('T',' ').slice(0,16) + 'Z' }
 function toLocalDateStr(d) {
   const tz = d.getTimezoneOffset()
   return new Date(d.getTime() - tz * 60000).toISOString().slice(0, 10)
-}
-
-export function normalizeHistorical(raw) {
-  let rows = Array.isArray(raw) ? raw : (raw?.points || raw?.data || raw?.results || [])
-  if (!Array.isArray(rows) || rows.length === 0) return []
-
-  const tKey = detectTimeKey(rows[0])
-  if (!tKey) return []
-
-  const cleaned = rows.map(r => {
-    const v = r[tKey]
-    let d
-    if (typeof v === 'number') {
-      const ms = v > 1e12 ? v : (v > 1e10 ? v : v * 1000)
-      d = new Date(ms)
-    } else {
-      d = new Date(v)
-    }
-    if (isNaN(d)) return null
-
-    // derive wind_speed from wind_x/y when available
-    let wind_speed
-    if (r.wind_x != null || r.wind_y != null) {
-      const wx = isNumeric(r.wind_x) ? Number(r.wind_x) : 0
-      const wy = isNumeric(r.wind_y) ? Number(r.wind_y) : 0
-      const sp = Math.sqrt(wx*wx + wy*wy)
-      if (Number.isFinite(sp)) wind_speed = sp
-    }
-
-    return { ...r, ...(wind_speed !== undefined ? { wind_speed } : {}), __t: d, __label: toLabel(d) }
-  }).filter(Boolean)
-
-  cleaned.sort((a,b) => a.__t - b.__t)
-  return cleaned
-}
-
-function discoverNumericKeys(series, maxRows = 10000) {
-  const counts = new Map()
-  const n = Math.min(series.length, maxRows)
-  for (let i = 0; i < n; i++) {
-    const r = series[i]
-    for (const k of Object.keys(r)) {
-      if (k.startsWith('__')) continue
-      if (isNumeric(r[k])) counts.set(k, (counts.get(k) || 0) + 1)
-    }
-  }
-  return Array.from(counts.keys()).sort((a,b) => (counts.get(b) - counts.get(a)))
-}
-
-function filterByRange(series, rangeKey) {
-  if (!Array.isArray(series) || series.length === 0) return series
-  if (rangeKey === 'all') return series
-  const end = series[series.length - 1].__t.getTime()
-  let start
-  switch (rangeKey) {
-    case '24h': start = end - 24*3600*1000; break
-    case '3d' : start = end - 3*24*3600*1000; break
-    case '7d' : start = end - 7*24*3600*1000; break
-    default   : return series
-  }
-  return series.filter(r => r.__t.getTime() >= start)
 }
 
 function filterByDay(series, dayStr) {
@@ -96,14 +27,14 @@ function filterByDay(series, dayStr) {
 
 export default function ChartPanel({ series }) {
   const [metric, setMetric]     = useState(null)
-  const [range, setRange]       = useState('all')   
-  const [day, setDay]           = useState('')      
-  const [dayDraft, setDayDraft] = useState('')      
+  const [range, setRange]       = useState('all')   // '24h' | '3d' | '7d' | 'all'
+  const [day, setDay]           = useState('')      // YYYY-MM-DD
+  const [dayDraft, setDayDraft] = useState('')      // input model
 
-  // discover metrics
-  const keys = useMemo(() => {
-    if (!series || !series.length) return []
-    return discoverNumericKeys(series)
+  // Discover numeric keys (via shared util)
+  const discovery = useMemo(() => {
+    if (!series || !series.length) return { keys: [], counts: new Map() }
+    return discoverNumericKeysWithCounts(series)
   }, [series])
 
   // bounds & helpers for date selection
@@ -115,18 +46,22 @@ export default function ChartPanel({ series }) {
     [series, todayStr]
   )
 
+  // default metric
   useEffect(() => {
-    if (!keys.length) { setMetric(null); return }
+    const { keys } = discovery
+    if (!keys || !keys.length) { setMetric(null); return }
     const preferred = ['temperature','temp','air_temp','dewpoint','wind_speed','wind_x','wind_y','pressure','precip','seaLevelPressure']
-    setMetric(preferred.find(k => keys.includes(k)) || keys[0])
-  }, [JSON.stringify(keys)])
+    const bestPreferred = preferred.find(k => keys.includes(k))
+    setMetric(bestPreferred || keys[0])
+  }, [JSON.stringify(discovery.keys)])
 
   useEffect(() => { setDayDraft(day) }, [day])
 
   if (series === null) return <div className="msg">Pick a station to see historical data.</div>
   if (!series.length)   return <div className="msg">⚠️ No historical data for this station (or API returned empty).</div>
-  if (!keys.length)     return <div className="msg">⚠️ No numeric metrics detected in this payload.</div>
+  if (!discovery.keys.length) return <div className="msg">⚠️ No numeric metrics detected in this payload.</div>
 
+  // Apply range or exact day filter
   const filtered = day ? filterByDay(series, day) : filterByRange(series, range)
 
   const labels = filtered.map(r => r.__label)
@@ -176,7 +111,7 @@ export default function ChartPanel({ series }) {
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           <label style={{ color:'var(--muted)', fontSize:12 }}>Metric:</label>
           <select className="select" value={metric || ''} onChange={e => setMetric(e.target.value)}>
-            {keys.map(k => <option key={k} value={k}>{k}</option>)}
+            {discovery.keys.map(k => <option key={k} value={k}>{k}</option>)}
           </select>
         </div>
 
@@ -211,18 +146,19 @@ export default function ChartPanel({ series }) {
         </div>
       </div>
 
-      <div style={{ height: 320 }}>
+      <div style={{ height: CHART_HEIGHT }}>
         <Line
           data={data}
           options={{
             responsive: true,
             animation: false,
             maintainAspectRatio: false,
+            interaction: { mode: 'nearest', intersect: false },
             scales: {
               x: { ticks: { maxRotation: 0, autoSkip: true, color: '#9bb0d3' }, grid: { color: 'rgba(155,176,211,0.15)' } },
               y: { ticks: { color: '#9bb0d3' }, grid: { color: 'rgba(155,176,211,0.15)' } }
             },
-            plugins: { legend: { labels: { color: '#e8eefc' } }, tooltip: { mode: 'nearest', intersect: false } }
+            plugins: { legend: { labels: { color: '#e8eefc' } } }
           }}
         />
       </div>
